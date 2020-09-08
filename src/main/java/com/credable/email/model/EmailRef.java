@@ -7,5 +7,5 @@ public class EmailRef {
     private String subject;
     private String time;
     private String sender;
-    private String text;
+    private String bodyContent;
 }

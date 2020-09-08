@@ -7,10 +7,11 @@ import org.jsoup.Jsoup;
 
 import javax.mail.*;
 import javax.mail.search.*;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+
 
 public class ReadMessage {
     private Store store;
@@ -34,29 +35,19 @@ public class ReadMessage {
         }
     }
 
-    public List<EmailRef> getLastHoursMails(int hours){
-        return getLastHoursMails(hours, "inbox");
+    public List<EmailRef> getLastHoursMails(int hours, boolean msgType){
+        return getLastHoursMails(hours, "inbox", msgType);
     }
 
-    public List<EmailRef> getLastHoursMails(int hours, String inboxName){
+    public List<EmailRef> getLastHoursMails(int hours, String inboxName, boolean msgType){
         Folder inbox = null;
         try {
             inbox = store.getFolder(inboxName);
             inbox.open(Folder.READ_WRITE);
 
-            Message[] messages = inbox.search(lastHoursSearchTerm(hours));
-            for(Message message : messages) {
-                System.out.println(message);
-                Address[] from = message.getFrom();
-                System.out.println("-------------------------------");
-                System.out.println("Date : " + message.getSentDate());
-                System.out.println("From : " + from[0]);
-                System.out.println("Subject: " + message.getSubject());
-                System.out.println("Content :"+ Jsoup.parse(message.getContent().toString()).text());
-                System.out.println("--------------------------------");
-            }
+            Message[] messages = inbox.search(lastHoursSearchTerm(hours, msgType));
             return getEmailRefs(messages);
-        } catch (MessagingException | IOException e) {
+        } catch (MessagingException e) {
             e.printStackTrace();
         } finally {
             closeFolder(inbox);
@@ -64,18 +55,6 @@ public class ReadMessage {
         return new ArrayList<>();
     }
 
-    private String processMessageBody(Message message) {
-        String messageBody = "";
-        try {
-            Object content = message.getContent();
-            if (content instanceof String) {
-                messageBody += Jsoup.parse(content.toString()).text();
-            }
-        } catch (IOException | MessagingException e) {
-            e.printStackTrace();
-        }
-        return messageBody;
-    }
     private List<EmailRef> getEmailRefs(Message[] messages) throws MessagingException {
         List<EmailRef> emails = new ArrayList<>();
         for (Message message : messages) {
@@ -83,22 +62,56 @@ public class ReadMessage {
             email.setSender(message.getFrom()[0].toString());
             email.setSubject(message.getSubject());
             email.setTime(message.getReceivedDate().toString());
-            email.setText(processMessageBody(message));
+            email.setBodyContent(getContent(message));
             emails.add(email);
         }
         return emails;
     }
 
-    private SearchTerm lastHoursSearchTerm(int hours) {
+    private SearchTerm lastHoursSearchTerm(int hours, boolean msgType) {
         DateTime rightNow = new DateTime();
         DateTime past = rightNow.minusHours(hours);
         Flags seen = new Flags(Flags.Flag.SEEN);
-        FlagTerm unseenFlagTerm = new FlagTerm(seen, true);
+        FlagTerm unseenFlagTerm = new FlagTerm(seen, msgType);
         SearchTerm newerThan = new ReceivedDateTerm(ComparisonTerm.GE, past.toDate());
         return new AndTerm(unseenFlagTerm, newerThan);
     }
 
-    private void closeFolder(Folder inbox) {
+    public String getContent(Message msg)
+
+    {
+        StringBuilder message = new StringBuilder();
+        try {
+            String contentType = msg.getContentType();
+            System.out.println("Content Type : " + contentType);
+            Multipart mp = (Multipart) msg.getContent();
+                message.append(dumpPart(mp.getBodyPart(0)));
+//                message.append(mp.getBodyPart(i).getContent().toString());
+                message.append("\n");
+        } catch (Exception ex) {
+            System.out.println("Exception arise at get Content");
+            ex.printStackTrace();
+        }
+        return message.toString();
+    }
+
+    public String dumpPart(Part p) throws Exception {
+        StringBuilder lines = new StringBuilder();
+        InputStream inputStream = p.getInputStream();
+        if (!(inputStream instanceof BufferedInputStream)) {
+            inputStream = new BufferedInputStream(inputStream);
+        }
+
+        int c;
+        System.out.println("Message : ");
+        while ((c = inputStream.read()) != -1) {
+            lines.append((char) c);
+            System.out.write(c);
+        }
+        return lines.toString();
+    }
+
+        private void closeFolder(Folder inbox) {
         try {
             if (inbox != null)
                 inbox.close(false);

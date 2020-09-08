@@ -14,8 +14,9 @@ public class EmailServiceImpl implements IEmailService {
 
     @Override
     public Response saveEmail(UserDetails userDetails){
+        System.out.println("request enter to service implementation");
         ReadMessage readMessage = new ReadMessage(userDetails);
-        List<EmailRef> emails = readMessage.getLastHoursMails(userDetails.getHours());
+        List<EmailRef> emails = readMessage.getLastHoursMails(userDetails.getHours(), userDetails.isType());
         if (!emails.isEmpty())
             return new Response(HttpStatus.OK.value(), "emails are ready", emails);
         return new Response(HttpStatus.NOT_FOUND.value(), "emails not Found");
